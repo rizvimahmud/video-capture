@@ -1,26 +1,26 @@
 <div style="text-align: center">
-  <h1 style="margin-bottom: 30px" *ngIf="secondsLeft > 0">{{ secondsLeft }}</h1>
-  <video class="video" #liveVideo autoplay controls></video>
-  <span class="m-1"></span>
+  <!-- <h1 style="margin-bottom: 30px" *ngIf="secondsLeft > 0">{{ secondsLeft }}</h1> -->
+  <video class="video" #liveVideo autoplay controls *ngIf="!(showPreview | async)"></video>
   <video
     class="video"
     style="width: 480px !important"
     controls
     #recordedVideo
+    *ngIf="(showPreview | async)"
   ></video>
   <br />
   <button
     class="btn btn-success btn-lg"
-    *ngIf="!isRecording"
     (click)="startVideoRecording()"
+    [disabled]="isRecording"
   >
     Start Recording
   </button>
-  <button
+  <!-- <button
     class="btn btn-warning btn-lg"
     *ngIf="isRecording"
     (click)="stopVideoRecording()"
   >
     Stop Recording
-  </button>
+  </button> -->
 </div>

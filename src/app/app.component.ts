@@ -1,5 +1,5 @@
 import { Component, ElementRef, ViewChild } from '@angular/core';
-import { finalize, map, take, takeWhile, timer } from 'rxjs';
+import { BehaviorSubject, finalize, map, takeWhile, timer } from 'rxjs';
 
 @Component({
   selector: 'app-root',
@@ -16,11 +16,16 @@ export class AppComponent {
   public stream!: MediaStream;
   public countDown$: any;
   public secondsLeft!: number;
+  public showPreview = new BehaviorSubject(false)
 
-  @ViewChild('recordedVideo') recordVideoElementRef!: ElementRef;
   @ViewChild('liveVideo') videoElementRef!: ElementRef;
+  @ViewChild('recordedVideo', {static: false}) set recordVideoElementRef(content: ElementRef){
+    if(content){
+      this.recordVideoElement = content.nativeElement
+    }
+  };
 
-  constructor() {}
+  constructor() { }
 
   startTimer() {
     this.countDown$ = timer(0, 1000)
@@ -44,14 +49,14 @@ export class AppComponent {
       video: { width: 480 },
     });
     this.videoElement = this.videoElementRef.nativeElement;
-    this.recordVideoElement = this.recordVideoElementRef.nativeElement;
     this.stream = stream;
     this.videoElement.srcObject = this.stream;
   }
 
   startVideoRecording() {
+    this.showPreview.next(false);
     this.startTimer();
-
+    this.initRecorder();
     this.videoRecordedBlobs = [];
     let options: any = {
       mimeType: 'video/webm',
@@ -68,6 +73,7 @@ export class AppComponent {
   }
 
   stopVideoRecording() {
+    this.showPreview.next(true);
     this.mediaVideoRecorder.stop();
     this.isRecording = !this.isRecording;
   }
