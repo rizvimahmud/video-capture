@@ -1,5 +1,11 @@
 import { Component, ElementRef, ViewChild } from '@angular/core';
 import { BehaviorSubject, finalize, map, takeWhile, timer } from 'rxjs';
+import {
+  HttpClient,
+  HttpParams,
+  HttpRequest,
+  HttpHeaders,
+} from '@angular/common/http';
 
 @Component({
   selector: 'app-root',
@@ -16,16 +22,21 @@ export class AppComponent {
   public stream!: MediaStream;
   public countDown$: any;
   public secondsLeft!: number;
-  public showPreview = new BehaviorSubject(false)
+  public showPreview = new BehaviorSubject(false);
+  private apiUrl = 'http://localhost:8000/upload';
+  public apiResponse!: any;
+  public errorRespone!: any;
 
   @ViewChild('liveVideo') videoElementRef!: ElementRef;
-  @ViewChild('recordedVideo', {static: false}) set recordVideoElementRef(content: ElementRef){
-    if(content){
-      this.recordVideoElement = content.nativeElement
+  @ViewChild('recordedVideo', { static: false }) set recordVideoElementRef(
+    content: ElementRef
+  ) {
+    if (content) {
+      this.recordVideoElement = content.nativeElement;
     }
-  };
+  }
 
-  constructor() { }
+  constructor(private http: HttpClient) {}
 
   startTimer() {
     this.countDown$ = timer(0, 1000)
@@ -89,6 +100,7 @@ export class AppComponent {
     try {
       this.mediaVideoRecorder.ondataavailable = (event: any) => {
         if (event.data && event.data.size > 0) {
+          console.log(event.data);
           this.videoRecordedBlobs.push(event.data);
         }
       };
@@ -101,14 +113,32 @@ export class AppComponent {
     try {
       this.mediaVideoRecorder.onstop = (event: Event) => {
         const videoBuffer = new Blob(this.videoRecordedBlobs, {
-          type: 'video/webm',
+          type: 'video/mp4',
         });
+        console.log({ videoBuffer });
         this.downloadVideoUrl = window.URL.createObjectURL(videoBuffer);
-        console.log(this.downloadVideoUrl);
         this.recordVideoElement.src = this.downloadVideoUrl;
+        this.uploadVideo(this.videoRecordedBlobs).subscribe((res: any) => {
+          console.log(res);
+          this.apiResponse = res.response;
+        });
       };
     } catch (error) {
       console.log(error);
     }
+  }
+
+  uploadVideo(blob: any) {
+    const instructions = 'smile, blink_eyes';
+    const formData = new FormData();
+    formData.append('video', blob);
+    formData.append('instructions', instructions);
+
+    const headers = new HttpHeaders();
+    headers.append('Content-Type', 'multipart/form-data');
+
+    return this.http.post(this.apiUrl, formData, {
+      headers,
+    });
   }
 }

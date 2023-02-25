@@ -1,12 +1,18 @@
 <div style="text-align: center">
   <!-- <h1 style="margin-bottom: 30px" *ngIf="secondsLeft > 0">{{ secondsLeft }}</h1> -->
-  <video class="video" #liveVideo autoplay controls *ngIf="!(showPreview | async)"></video>
+  <video
+    class="video"
+    #liveVideo
+    autoplay
+    controls
+    *ngIf="!(showPreview | async)"
+  ></video>
   <video
     class="video"
     style="width: 480px !important"
     controls
     #recordedVideo
-    *ngIf="(showPreview | async)"
+    *ngIf="showPreview | async"
   ></video>
   <br />
   <button
@@ -23,4 +29,8 @@
   >
     Stop Recording
   </button> -->
+</div>
+
+<div>
+  <p>{{ apiResponse }}</p>
 </div>
