@@ -1,11 +1,7 @@
 import { Component, ElementRef, ViewChild } from '@angular/core';
 import { BehaviorSubject, finalize, map, takeWhile, timer } from 'rxjs';
-import {
-  HttpClient,
-  HttpParams,
-  HttpRequest,
-  HttpHeaders,
-} from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { v4 as uuid } from 'uuid'
 
 @Component({
   selector: 'app-root',
@@ -14,27 +10,35 @@ import {
 })
 export class AppComponent {
   public videoElement!: HTMLVideoElement;
-  public recordVideoElement!: HTMLVideoElement;
+  public recordedVideoElement!: HTMLVideoElement;
+  public canvas!: HTMLCanvasElement;
+  public capturedImage!: HTMLImageElement;
   public mediaVideoRecorder: any;
-  public videoRecordedBlobs!: Blob[];
+  public recordedChunks!: Blob[];
+  public stream!: MediaStream;
   public isRecording: boolean = false;
   public downloadVideoUrl!: string;
-  public stream!: MediaStream;
   public countDown$: any;
   public secondsLeft!: number;
-  public showPreview = new BehaviorSubject(false);
-  private apiUrl = 'http://localhost:8000/upload';
-  public apiResponse!: any;
-  public errorRespone!: any;
+  public showPreview$ = new BehaviorSubject(false);
+  private width = 480;
+
+  private apiUrl = 'http://172.16.4.134:8080/process_video/';
 
   @ViewChild('liveVideo') videoElementRef!: ElementRef;
   @ViewChild('recordedVideo', { static: false }) set recordVideoElementRef(
     content: ElementRef
   ) {
     if (content) {
-      this.recordVideoElement = content.nativeElement;
+      this.recordedVideoElement = content.nativeElement;
     }
   }
+  @ViewChild('canvas') canvasRef!: ElementRef;
+  @ViewChild('capturedImage', {static : false}) set capturedImageRef(content: ElementRef){
+    if(content){
+      this.capturedImage = content.nativeElement;
+    }
+  };
 
   constructor(private http: HttpClient) {}
 
@@ -53,22 +57,36 @@ export class AppComponent {
 
   async ngOnInit() {
     await this.initRecorder();
+    this.loadCanvas();
   }
 
   async initRecorder() {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 480 },
-    });
-    this.videoElement = this.videoElementRef.nativeElement;
-    this.stream = stream;
-    this.videoElement.srcObject = this.stream;
+    const constraints = {
+      video: { width : this.width },
+      audio: false
+    }
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      this.videoElement = this.videoElementRef.nativeElement;
+      this.stream = stream;
+      this.videoElement.srcObject = this.stream;
+    }catch(error){
+      this.handelMediaRejectionError(error)
+    }
+  }
+
+  loadCanvas(){
+    this.canvas = this.canvasRef.nativeElement;
+    // this.captureImage = this.capturedImageRef.nativeElement;
+    this.clearImage();
   }
 
   startVideoRecording() {
-    this.showPreview.next(false);
+    this.showPreview$.next(false);
+    this.clearImage();
     this.startTimer();
     this.initRecorder();
-    this.videoRecordedBlobs = [];
+    this.recordedChunks = [];
     let options: any = {
       mimeType: 'video/webm',
     };
@@ -84,24 +102,17 @@ export class AppComponent {
   }
 
   stopVideoRecording() {
-    this.showPreview.next(true);
+    this.showPreview$.next(true);
     this.mediaVideoRecorder.stop();
     this.isRecording = !this.isRecording;
   }
 
-  playRecording() {
-    if (!this.videoRecordedBlobs || !this.videoRecordedBlobs.length) {
-      return;
-    }
-    this.recordVideoElement.play();
-  }
 
   onDataAvailableVideoEvent() {
     try {
       this.mediaVideoRecorder.ondataavailable = (event: any) => {
         if (event.data && event.data.size > 0) {
-          console.log(event.data);
-          this.videoRecordedBlobs.push(event.data);
+          this.recordedChunks.push(event.data);
         }
       };
     } catch (error) {
@@ -109,19 +120,18 @@ export class AppComponent {
     }
   }
 
+
   onStopVideoRecordingEvent() {
     try {
       this.mediaVideoRecorder.onstop = (event: Event) => {
-        const videoBuffer = new Blob(this.videoRecordedBlobs, {
+        const videoBuffer = new Blob(this.recordedChunks, {
           type: 'video/mp4',
         });
-        console.log({ videoBuffer });
         this.downloadVideoUrl = window.URL.createObjectURL(videoBuffer);
-        this.recordVideoElement.src = this.downloadVideoUrl;
-        this.uploadVideo(this.videoRecordedBlobs).subscribe((res: any) => {
-          console.log(res);
-          this.apiResponse = res.response;
-        });
+        this.recordedVideoElement.src = this.downloadVideoUrl;
+        // this.uploadVideo(videoBuffer).subscribe((res: any) => {
+        //   console.log(res);
+        // });
       };
     } catch (error) {
       console.log(error);
@@ -134,11 +144,61 @@ export class AppComponent {
     formData.append('video', blob);
     formData.append('instructions', instructions);
 
-    const headers = new HttpHeaders();
-    headers.append('Content-Type', 'multipart/form-data');
+    const headers = new HttpHeaders({
+      "uid": uuid()
+    });
 
     return this.http.post(this.apiUrl, formData, {
       headers,
     });
+  }
+
+
+  clearImage(){
+    const context = this.canvas.getContext('2d');
+    if(context){
+      context.fillStyle = "#fff"
+      context.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      const data = this.canvas.toDataURL("image/png");
+      this.capturedImage.setAttribute("src", data);
+    }
+  }
+
+
+  takeSnapshot(){
+    if(this.recordedVideoElement.duration > 0){
+      let context;
+      let width = this.width, height = this.recordedVideoElement.offsetHeight;
+      this.canvas.width = width;
+      this.canvas.height = height;
+      context = this.canvas.getContext("2d")!;
+        context.drawImage
+        context.drawImage(this.recordedVideoElement, 0, 0, width, height);
+        let data = this.canvas.toDataURL('image/png')
+        this.capturedImage.setAttribute("src", data);
+    }else{
+      this.clearImage();
+    }
+
+  }
+
+
+  handelMediaRejectionError(err: any){
+    if (err.name == "NotFoundError" || err.name == "DevicesNotFoundError") {
+        //required track is missing
+        alert('Webcam not found') 
+    } else if (err.name == "NotReadableError" || err.name == "TrackStartError") {
+        //webcam or mic are already in use
+        alert('Webcam or mic are already in user') 
+    } else if (err.name == "OverconstrainedError" || err.name == "ConstraintNotSatisfiedError") {
+        //constraints can not be satisfied by avb. devices
+        alert('Unable to record video') 
+    } else if (err.name == "NotAllowedError" || err.name == "PermissionDeniedError") {
+        //permission denied in browser
+        alert('Permission denied for accessing device media') 
+    } else if (err.name == "TypeError" || err.name == "TypeError") {
+        //empty constraints object
+        alert('Unable to access media devices')
+    } 
   }
 }
