@@ -21,6 +21,7 @@ export class AppComponent {
   public countDown$: any;
   public secondsLeft!: number;
   public showPreview$ = new BehaviorSubject(false);
+  public livenessCheckSuccess$ = new BehaviorSubject(false);
   private width = 480;
 
   private apiUrl = 'http://172.16.4.134:8080/process_video/';
@@ -55,6 +56,8 @@ export class AppComponent {
       .subscribe((t) => (this.secondsLeft = t));
   }
 
+
+
   async ngOnInit() {
     await this.initRecorder();
     this.loadCanvas();
@@ -81,24 +84,24 @@ export class AppComponent {
     this.clearImage();
   }
 
-  startVideoRecording() {
-    this.showPreview$.next(false);
-    this.clearImage();
-    this.startTimer();
-    this.initRecorder();
-    this.recordedChunks = [];
-    let options: any = {
-      mimeType: 'video/webm',
-    };
+  async startVideoRecording() {
     try {
+      this.showPreview$.next(false);
+      this.clearImage();
+      this.startTimer();
+      this.recordedChunks = [];
+      let options: any = {
+        mimeType: "video/webm" 
+      };
+      await this.initRecorder();
       this.mediaVideoRecorder = new MediaRecorder(this.stream, options);
+      this.mediaVideoRecorder.start();
+      this.isRecording = !this.isRecording;
+      this.onDataAvailableVideoEvent();
+      this.onStopVideoRecordingEvent();
     } catch (err) {
       console.log(err);
     }
-    this.mediaVideoRecorder.start();
-    this.isRecording = !this.isRecording;
-    this.onDataAvailableVideoEvent();
-    this.onStopVideoRecordingEvent();
   }
 
   stopVideoRecording() {
@@ -129,9 +132,16 @@ export class AppComponent {
         });
         this.downloadVideoUrl = window.URL.createObjectURL(videoBuffer);
         this.recordedVideoElement.src = this.downloadVideoUrl;
-        // this.uploadVideo(videoBuffer).subscribe((res: any) => {
-        //   console.log(res);
-        // });
+        this.uploadVideo(videoBuffer).subscribe({
+          next: (res: any) => {
+            console.log(res)
+            if(res.body.livenessCheck){
+              this.livenessCheckSuccess$.next(true)
+            }else {
+              this.livenessCheckSuccess$.next(false)
+            }
+          }
+        });
       };
     } catch (error) {
       console.log(error);
@@ -184,12 +194,13 @@ export class AppComponent {
 
 
   handelMediaRejectionError(err: any){
+    console.log({error:err})
     if (err.name == "NotFoundError" || err.name == "DevicesNotFoundError") {
         //required track is missing
         alert('Webcam not found') 
     } else if (err.name == "NotReadableError" || err.name == "TrackStartError") {
         //webcam or mic are already in use
-        alert('Webcam or mic are already in user') 
+        alert('Webcam or mic are already in use') 
     } else if (err.name == "OverconstrainedError" || err.name == "ConstraintNotSatisfiedError") {
         //constraints can not be satisfied by avb. devices
         alert('Unable to record video') 

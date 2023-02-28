@@ -21,7 +21,7 @@
   >
     Start Recording
   </button>
-  <button *ngIf="showPreview$ | async"  (click)="takeSnapshot()">Capture Image</button>
+  <button *ngIf="livenessCheckSuccess$ | async"  (click)="takeSnapshot()">Capture Image</button>
 
   <div class="image-container">
     <canvas id="canvas" #canvas ></canvas>
